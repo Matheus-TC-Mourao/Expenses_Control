@@ -28,8 +28,8 @@ Uma API RESTful para gerenciar despesas pessoais de um usuário, construída com
 
 1. **Clone este repositório**
    ```bash
-   git clone https://github.com/Matheus-TC-Mourao/api-despesas-pessoais.git
-   cd api-despesas-pessoais
+   https://github.com/Matheus-TC-Mourao/Expenses_Control.git
+   cd Expenses_Control
 
 
 2. **Instale as dependências**
