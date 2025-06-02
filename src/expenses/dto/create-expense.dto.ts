@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Category } from '@prisma/client';
-import { IsDateString, IsEnum, IsNumber, IsString } from 'class-validator';
+import { IsEnum, IsNumber, IsString, Matches } from 'class-validator';
 
 export class CreateExpenseDto {
   @ApiProperty()
@@ -16,6 +16,13 @@ export class CreateExpenseDto {
   category: Category;
 
   @ApiProperty()
-  @IsDateString()
-  date: Date;
+  @IsString()
+  @Matches(/^[0-3]\d-[0-1]\d-\d{4}$/, {
+    message: 'Data deve ter o seguinte formato DD-MM-YYYY',
+  })
+  date: string;
+
+  // @ApiProperty()
+  // @IsString()
+  // userId: string;
 }

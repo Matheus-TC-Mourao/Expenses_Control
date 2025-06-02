@@ -1,28 +1,55 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { PrismaService } from 'src/prisma/prisma.service';
+import { RegisterDto } from './dto/register.dto';
+import * as bcrypt from 'bcrypt';
+import { LoginDto } from './dto/login.dto';
 
 @Injectable()
 export class AuthService {
-  private readonly user = {
-    id: 'user-123',
-    username: 'User',
-    password: 'senha123',
-  };
+  constructor(
+    private readonly jwtService: JwtService,
+    private readonly prisma: PrismaService,
+  ) {}
 
-  constructor(private readonly jwtService: JwtService) {}
+  async register(registerDto: RegisterDto) {
+    const { name, email, password } = registerDto;
+    const saltRounds = 10;
 
-  validateUser(username: string, password: string) {
-    if (username === this.user.username && password === this.user.password) {
-      const { password, ...result } = this.user;
-      return result;
+    const existingUser = await this.prisma.user.findUnique({
+      where: { email },
+    });
+    if (existingUser) {
+      throw new ConflictException('Email já cadastrado');
     }
-    throw new UnauthorizedException('Usuário ou senha inválidos');
+
+    const hashedPassword = await bcrypt.hash(password, saltRounds);
+
+    const user = await this.prisma.user.create({
+      data: { name, email, password: hashedPassword },
+    });
+    return user;
   }
 
-  login(username: string, password: string) {
-    const user = this.validateUser(username, password);
-    const payload = { sub: user.id, username: user.username };
-    const accessToken: string = this.jwtService.sign(payload);
-    return { access_token: accessToken };
+  async login(login: LoginDto) {
+    const { email, password } = login;
+    const user = await this.prisma.user.findUnique({ where: { email } });
+
+    if (!user) {
+      throw new UnauthorizedException('Credenciais inválidas');
+    }
+
+    const passwordValid = await bcrypt.compare(password, user.password);
+    if (!passwordValid) {
+      throw new UnauthorizedException('Senha inválida');
+    }
+
+    const payload = { userId: user.id, email: user.email };
+
+    return this.jwtService.sign(payload);
   }
 }

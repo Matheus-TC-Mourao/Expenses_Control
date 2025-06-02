@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { CreateExpenseDto } from './dto/create-expense.dto';
 import { UpdateExpenseDto } from './dto/update-expense.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -8,34 +13,44 @@ import { Category, Prisma } from '@prisma/client';
 export class ExpensesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(data: CreateExpenseDto) {
-    const dateObj = new Date(data.date);
+  async create(userId: string, data: CreateExpenseDto) {
+    const dateObj = this.parseDate(data.date);
     return this.prisma.expense.create({
       data: {
+        userId,
         ...data,
-        month: dateObj.getUTCMonth() + 1,
-        year: dateObj.getUTCFullYear(),
+        date: dateObj,
       },
     });
   }
 
-  async findAll(filters?: {
-    month?: number;
-    year?: number;
-    category?: Category;
-  }) {
-    const where: Prisma.ExpenseWhereInput = {};
+  async findAll(
+    filters: { month?: number; year?: number; category?: Category },
+    userId: string,
+  ) {
+    const where: Prisma.ExpenseWhereInput = { userId };
 
-    if (filters?.month != null) {
-      where.month = filters.month;
-    }
-
-    if (filters?.year != null) {
-      where.year = filters.year;
-    }
-
-    if (filters?.category) {
+    if (filters.category) {
       where.category = filters.category;
+    }
+
+    if (filters.year) {
+      const startDate = new Date(filters.year, 0, 1);
+      const endDate = new Date(filters.year, 12, 31);
+      where.date = {
+        gte: startDate,
+        lt: endDate,
+      };
+    }
+
+    if (filters.year && filters.month) {
+      const startDate = new Date(filters.year, filters.month - 1, 1);
+      const endDate = new Date(filters.year, filters.month - 1, 31);
+
+      where.date = {
+        gte: startDate,
+        lt: endDate,
+      };
     }
 
     return this.prisma.expense.findMany({
@@ -44,25 +59,29 @@ export class ExpensesService {
     });
   }
 
-  async findOne(id: string) {
+  async findOne(userId: string, id: string) {
     const expense = await this.prisma.expense.findUnique({ where: { id } });
 
     if (!expense) {
       throw new NotFoundException('Despesa não encontrada');
     }
+
+    if (userId !== expense.id) {
+      throw new ForbiddenException('Acesso negado!');
+    }
+
     return expense;
   }
 
-  async update(id: string, data: UpdateExpenseDto) {
-    await this.findOne(id);
+  async update(userId: string, id: string, data: UpdateExpenseDto) {
+    await this.findOne(userId, id);
 
-    const updateData: Prisma.ExpenseUpdateInput = { ...data };
-
+    let parsedDate: Date | undefined = undefined;
     if (data.date) {
-      const dateObj = new Date(data.date);
-      updateData.month = dateObj.getUTCMonth() + 1;
-      updateData.year = dateObj.getUTCFullYear();
+      parsedDate = this.parseDate(data.date);
     }
+
+    const updateData: Prisma.ExpenseUpdateInput = { ...data, date: parsedDate };
 
     return this.prisma.expense.update({
       where: { id },
@@ -70,8 +89,26 @@ export class ExpensesService {
     });
   }
 
-  async remove(id: string) {
-    await this.findOne(id);
+  async remove(userId: string, id: string) {
+    await this.findOne(userId, id);
     return this.prisma.expense.delete({ where: { id } });
+  }
+
+  private parseDate(str: string): Date {
+    const [day, month, year] = str.split('-').map(Number);
+
+    const date = new Date(year, month - 1, day);
+
+    if (
+      date.getFullYear() !== year ||
+      date.getMonth() !== month - 1 ||
+      date.getDate() !== day
+    ) {
+      throw new BadRequestException(
+        'Formato incorreto de data. (ex. 01-02-2000)',
+      );
+    }
+
+    return date;
   }
 }

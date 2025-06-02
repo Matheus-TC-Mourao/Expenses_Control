@@ -7,16 +7,26 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model User {
+  id       String    @id @default(uuid())
+  name     String
+  email    String    @unique
+  password String
+  role     Role      @default(USER)
+  expenses Expense[]
+}
+
 model Expense {
   id        String   @id @default(uuid())
   title     String
   amount    Float
   category  Category
   date      DateTime
-  month     Int
-  year      Int
+  userId    String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  User User @relation(fields: [userId], references: [id])
 }
 
 enum Category {
@@ -25,4 +35,9 @@ enum Category {
   ALIMENTACAO
   SAUDE
   TRANSPORTE
+}
+
+enum Role {
+  ADIM
+  USER
 }
